@@ -43,6 +43,7 @@
         <div class="top-buttons">
             <button id="show-answer-btn" class="btn">Show Correct Answers</button>
             <button id="toggle-qnum-btn" class="btn">Show Question Number</button>
+            <button id="toggle-sidebar-btn" class="btn">Hide Sidebar</button>
         </div>
 
         <div class="exam-layout">
@@ -120,6 +121,8 @@
             const backHomeBtn = document.getElementById('back-home');
             const showAnswerBtn = document.getElementById('show-answer-btn');
             const toggleQnumBtn = document.getElementById('toggle-qnum-btn');
+            const toggleSidebarBtn = document.getElementById('toggle-sidebar-btn');
+            const questionSidebar = document.getElementById('question-sidebar');
 
             questionCountEl.textContent = `${allQuestions.length} questions`;
             startTimer();
@@ -252,6 +255,11 @@
                     block.classList.toggle('question-number-visible', state.questionNumberVisible);
                 });
                 toggleQnumBtn.textContent = state.questionNumberVisible ? 'Hide Question Number' : 'Show Question Number';
+            });
+
+            toggleSidebarBtn.addEventListener('click', function() {
+                questionSidebar.classList.toggle('sidebar-hidden');
+                toggleSidebarBtn.textContent = questionSidebar.classList.contains('sidebar-hidden') ? 'Show Sidebar' : 'Hide Sidebar';
             });
 
             function updateTimer() {

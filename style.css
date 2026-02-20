@@ -89,7 +89,13 @@ h1, h2, h3 {
 }
 
 .exam-container .container {
-    max-width: none;
+    max-width: 1440px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.question-sidebar.sidebar-hidden {
+    display: none;
 }
 
 .exam-info {
