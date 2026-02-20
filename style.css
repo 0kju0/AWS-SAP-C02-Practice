@@ -114,6 +114,13 @@ h1, h2, h3 {
 .exam-main {
     flex: 1;
     min-width: 0;
+    max-width: 100%;
+}
+
+@media (min-width: 1280px) {
+    .exam-main {
+        min-width: 1024px;
+    }
 }
 
 #questions-container {
@@ -266,6 +273,10 @@ h1, h2, h3 {
 @media (max-width: 768px) {
     .exam-layout {
         flex-direction: column;
+    }
+
+    .exam-main {
+        min-width: 0;
     }
 
     .question-sidebar {
