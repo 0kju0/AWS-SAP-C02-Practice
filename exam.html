@@ -13,8 +13,12 @@
             border-radius: 4px;
         }
 
-        #question-number {
+        .question-block .question-number {
             display: none; /* Hide question number by default */
+        }
+
+        .question-block.question-number-visible .question-number {
+            display: block;
         }
 
         .top-buttons {
@@ -31,30 +35,35 @@
         <header>
             <h1>AWS Mock Exam</h1>
             <div class="exam-info">
-                <span id="question-count">Question 1/50</span>
+                <span id="question-count">0 questions</span>
                 <span id="timer">Time: 00:00</span>
             </div>
         </header>
 
-        <!-- Added: top function buttons -->
         <div class="top-buttons">
             <button id="show-answer-btn" class="btn">Show Correct Answers</button>
             <button id="toggle-qnum-btn" class="btn">Show Question Number</button>
         </div>
 
-        <div class="question-area">
-            <h2 id="question-number">Question #1</h2>
-            <div id="question-text" class="question-text"></div>
+        <div class="exam-layout">
+            <main class="exam-main">
+                <div id="questions-container">
+                    <!-- Question blocks rendered by JavaScript -->
+                </div>
+                <div class="exam-actions">
+                    <button id="submit-btn" class="btn submit-btn">Submit Answers</button>
+                </div>
+            </main>
 
-            <div id="options" class="options">
-                <!-- Options will be generated dynamically by JavaScript -->
-            </div>
-        </div>
-
-        <div class="navigation">
-            <button id="prev-btn" class="btn">Previous</button>
-            <button id="next-btn" class="btn">Next</button>
-            <button id="submit-btn" class="btn submit-btn">Submit Answers</button>
+            <aside id="question-sidebar" class="question-sidebar">
+                <div class="sidebar-title">Questions</div>
+                <nav id="question-sidebar-list" aria-label="Question list">
+                    <!-- Links rendered by JavaScript -->
+                </nav>
+                <div class="sidebar-submit">
+                    <button id="submit-btn-sidebar" class="btn submit-btn">Submit Answers</button>
+                </div>
+            </aside>
         </div>
 
         <div id="result-modal" class="modal">
@@ -72,16 +81,13 @@
             const examMode = localStorage.getItem('examMode') || 'full';
             let allQuestions = [];
 
-            // Load questions based on exam mode
             if (examMode === 'wrong') {
-                const wrongQuestions = JSON.parse(localStorage.getItem('wrongQuestions') || []);
+                const wrongQuestions = JSON.parse(localStorage.getItem('wrongQuestions') || '[]');
                 allQuestions = questions.filter(q => wrongQuestions.includes(q.question_number));
             } else {
                 allQuestions = [...questions];
             }
 
-
-            // Shuffle questions
             function shuffle(array) {
                 for (let i = array.length - 1; i > 0; i--) {
                     const j = Math.floor(Math.random() * (i + 1));
@@ -96,22 +102,18 @@
                 return;
             }
 
-            // Exam state
             const state = {
-                currentIndex: 0,
                 answers: new Array(allQuestions.length).fill(null),
                 startTime: new Date().getTime(),
-                submitted: false
+                submitted: false,
+                questionNumberVisible: false
             };
 
-            // DOM elements
             const questionCountEl = document.getElementById('question-count');
-            const questionNumberEl = document.getElementById('question-number');
-            const questionTextEl = document.getElementById('question-text');
-            const optionsEl = document.getElementById('options');
-            const prevBtn = document.getElementById('prev-btn');
-            const nextBtn = document.getElementById('next-btn');
+            const questionsContainer = document.getElementById('questions-container');
+            const sidebarList = document.getElementById('question-sidebar-list');
             const submitBtn = document.getElementById('submit-btn');
+            const submitBtnSidebar = document.getElementById('submit-btn-sidebar');
             const timerEl = document.getElementById('timer');
             const resultModal = document.getElementById('result-modal');
             const resultTextEl = document.getElementById('result-text');
@@ -119,138 +121,167 @@
             const showAnswerBtn = document.getElementById('show-answer-btn');
             const toggleQnumBtn = document.getElementById('toggle-qnum-btn');
 
-            // Initialize
-            renderQuestion();
+            questionCountEl.textContent = `${allQuestions.length} questions`;
             startTimer();
 
-            // Event listeners
-            prevBtn.addEventListener('click', goToPrevQuestion);
-            nextBtn.addEventListener('click', goToNextQuestion);
+            // Build sidebar links
+            allQuestions.forEach((_, i) => {
+                const a = document.createElement('a');
+                a.href = '#q-' + i;
+                a.textContent = String(i + 1);
+                a.setAttribute('data-index', i);
+                a.className = 'sidebar-link';
+                sidebarList.appendChild(a);
+            });
+
+            // Smooth scroll for sidebar links
+            sidebarList.addEventListener('click', function(e) {
+                const a = e.target.closest('a[href^="#q-"]');
+                if (!a) return;
+                e.preventDefault();
+                const id = a.getAttribute('href').slice(1);
+                const el = document.getElementById(id);
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+
+            // Render all question blocks
+            function renderAllQuestions() {
+                questionsContainer.innerHTML = '';
+                allQuestions.forEach((question, index) => {
+                    const block = document.createElement('div');
+                    block.className = 'question-block' + (state.questionNumberVisible ? ' question-number-visible' : '');
+                    block.id = 'q-' + index;
+
+                    const qNum = document.createElement('h2');
+                    qNum.className = 'question-number';
+                    qNum.textContent = 'Question #' + question.question_number;
+
+                    const qText = document.createElement('div');
+                    qText.className = 'question-text';
+                    qText.textContent = question.stem;
+
+                    const optionsWrap = document.createElement('div');
+                    optionsWrap.className = 'options';
+
+                    const inputName = 'answer-' + index;
+                    Object.entries(question.options).forEach(([key, value]) => {
+                        const optionDiv = document.createElement('div');
+                        optionDiv.className = 'option';
+
+                        const input = document.createElement('input');
+                        input.type = question.correct_answer.length > 1 ? 'checkbox' : 'radio';
+                        input.name = inputName;
+                        input.value = key;
+                        input.id = 'option-' + index + '-' + key;
+
+                        if (state.answers[index] && state.answers[index].includes(key)) {
+                            input.checked = true;
+                        }
+
+                        input.addEventListener('change', function() {
+                            updateAnswerForIndex(index);
+                        });
+
+                        const label = document.createElement('label');
+                        label.htmlFor = input.id;
+                        label.textContent = key + '. ' + value;
+
+                        optionDiv.appendChild(input);
+                        optionDiv.appendChild(label);
+                        optionsWrap.appendChild(optionDiv);
+                    });
+
+                    block.appendChild(qNum);
+                    block.appendChild(qText);
+                    block.appendChild(optionsWrap);
+                    questionsContainer.appendChild(block);
+                });
+            }
+
+            function updateAnswerForIndex(index) {
+                const selected = [];
+                document.querySelectorAll('input[name="answer-' + index + '"]:checked').forEach(input => {
+                    selected.push(input.value);
+                });
+                state.answers[index] = selected.length > 0 ? selected : null;
+            }
+
+            renderAllQuestions();
+
+            // Scroll spy: highlight sidebar link for question in view
+            const observer = new IntersectionObserver(
+                function(entries) {
+                    entries.forEach(function(entry) {
+                        if (!entry.isIntersecting) return;
+                        const id = entry.target.id;
+                        const match = id && id.match(/^q-(\d+)$/);
+                        if (!match) return;
+                        const index = parseInt(match[1], 10);
+                        sidebarList.querySelectorAll('.sidebar-link').forEach(function(link) {
+                            link.classList.toggle('active', parseInt(link.getAttribute('data-index'), 10) === index);
+                        });
+                        questionCountEl.textContent = 'Question ' + (index + 1) + ' of ' + allQuestions.length;
+                    });
+                },
+                { root: null, rootMargin: '-20% 0px -60% 0px', threshold: 0 }
+            );
+            questionsContainer.querySelectorAll('.question-block').forEach(function(block) {
+                observer.observe(block);
+            });
+
             submitBtn.addEventListener('click', submitExam);
-            backHomeBtn.addEventListener('click', () => {
-                window.location.href = 'index.html';
-            });
+            submitBtnSidebar.addEventListener('click', submitExam);
+            backHomeBtn.addEventListener('click', () => { window.location.href = 'index.html'; });
 
-            // Added: show correct answer feature
-            showAnswerBtn.addEventListener('click', function () {
-                const question = allQuestions[state.currentIndex];
-                const correct = question.correct_answer;
-                document.querySelectorAll('input[name="answer"]').forEach(input => {
-                    if (correct.includes(input.value)) {
-                        input.parentElement.classList.add('correct-answer');
-                    } else {
-                        input.parentElement.classList.remove('correct-answer');
-                    }
+            showAnswerBtn.addEventListener('click', function() {
+                allQuestions.forEach(function(question, index) {
+                    const correct = question.correct_answer;
+                    document.querySelectorAll('input[name="answer-' + index + '"]').forEach(function(input) {
+                        if (correct.includes(input.value)) {
+                            input.parentElement.classList.add('correct-answer');
+                        } else {
+                            input.parentElement.classList.remove('correct-answer');
+                        }
+                    });
                 });
             });
 
-            // Added: toggle question number display
-            toggleQnumBtn.addEventListener('click', function () {
-                const isVisible = questionNumberEl.style.display !== 'none';
-                questionNumberEl.style.display = isVisible ? 'none' : 'block';
-                toggleQnumBtn.textContent = isVisible ? 'Show Question Number' : 'Hide Question Number';
+            toggleQnumBtn.addEventListener('click', function() {
+                state.questionNumberVisible = !state.questionNumberVisible;
+                questionsContainer.querySelectorAll('.question-block').forEach(function(block) {
+                    block.classList.toggle('question-number-visible', state.questionNumberVisible);
+                });
+                toggleQnumBtn.textContent = state.questionNumberVisible ? 'Hide Question Number' : 'Show Question Number';
             });
-            function renderQuestion() {
-                const question = allQuestions[state.currentIndex];
-
-                questionCountEl.textContent = `Question ${state.currentIndex + 1}/${allQuestions.length}`;
-                questionNumberEl.textContent = `Question #${question.question_number}`;
-                questionTextEl.textContent = question.stem;
-
-                // Clear options
-                optionsEl.innerHTML = '';
-
-                // Generate options
-                Object.entries(question.options).forEach(([key, value]) => {
-                    const optionDiv = document.createElement('div');
-                    optionDiv.className = 'option';
-
-                    const input = document.createElement('input');
-                    input.type = question.correct_answer.length > 1 ? 'checkbox' : 'radio';
-                    input.name = 'answer';
-                    input.value = key;
-                    input.id = `option-${key}`;
-
-                    // If already selected, restore state
-                    if (state.answers[state.currentIndex] &&
-                        state.answers[state.currentIndex].includes(key)) {
-                        input.checked = true;
-                    }
-
-                    const label = document.createElement('label');
-                    label.htmlFor = `option-${key}`;
-                    label.textContent = `${key}. ${value}`;
-
-                    optionDiv.appendChild(input);
-                    optionDiv.appendChild(label);
-                    optionsEl.appendChild(optionDiv);
-                });
-
-                // Update button states
-                prevBtn.disabled = state.currentIndex === 0;
-                nextBtn.disabled = state.currentIndex === allQuestions.length - 1;
-
-                submitBtn.style.display = state.currentIndex === allQuestions.length - 1 ? 'inline-block' : 'none';
-
-                // Clear previously highlighted answers
-                document.querySelectorAll('.correct-answer').forEach(el => el.classList.remove('correct-answer'));
-            }
-
-            // Save current answer
-            function saveAnswer() {
-                const selectedOptions = [];
-                document.querySelectorAll('input[name="answer"]:checked').forEach(input => {
-                    selectedOptions.push(input.value);
-                });
-
-                state.answers[state.currentIndex] = selectedOptions.length > 0 ? selectedOptions : null;
-            }
-
-            // Previous question
-            function goToPrevQuestion() {
-                saveAnswer();
-                state.currentIndex--;
-                renderQuestion();
-            }
-
-            // Next question
-            function goToNextQuestion() {
-                saveAnswer();
-                state.currentIndex++;
-                renderQuestion();
-            }
-
-            // Timer
-            function startTimer() {
-                updateTimer();
-                setInterval(updateTimer, 1000);
-            }
 
             function updateTimer() {
                 const now = new Date().getTime();
                 const elapsed = Math.floor((now - state.startTime) / 1000);
                 const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
                 const seconds = (elapsed % 60).toString().padStart(2, '0');
-                timerEl.textContent = `Time: ${minutes}:${seconds}`;
+                timerEl.textContent = 'Time: ' + minutes + ':' + seconds;
             }
 
-            // Submit exam
+            function startTimer() {
+                updateTimer();
+                setInterval(updateTimer, 1000);
+            }
+
             function submitExam() {
-                saveAnswer();
+                // Collect answers from all blocks (in case any change event missed)
+                for (let i = 0; i < allQuestions.length; i++) {
+                    updateAnswerForIndex(i);
+                }
                 state.submitted = true;
 
-                // Calculate score
                 let correctCount = 0;
                 const wrongQuestions = [];
 
-                allQuestions.forEach((question, index) => {
+                allQuestions.forEach(function(question, index) {
                     const userAnswer = state.answers[index] || [];
                     const correctAnswer = question.correct_answer;
-
-                    // Compare answers (order does not matter)
                     const isCorrect = userAnswer.length === correctAnswer.length &&
-                                      userAnswer.every(opt => correctAnswer.includes(opt));
-
+                        userAnswer.every(function(opt) { return correctAnswer.includes(opt); });
                     if (isCorrect) {
                         correctCount++;
                     } else {
@@ -258,23 +289,19 @@
                     }
                 });
 
-                // Update wrong question records
                 const existingWrong = JSON.parse(localStorage.getItem('wrongQuestions') || '[]');
                 const newWrong = [...new Set([...existingWrong, ...wrongQuestions])];
                 localStorage.setItem('wrongQuestions', JSON.stringify(newWrong));
 
-                // Save this score
                 const score = Math.round((correctCount / allQuestions.length) * 100);
                 localStorage.setItem('lastScore', score);
 
-                // Show results
-                resultTextEl.innerHTML = `
-                    <p>Total Questions: ${allQuestions.length}</p>
-                    <p>Correct: ${correctCount}</p>
-                    <p>Incorrect: ${allQuestions.length - correctCount}</p>
-                    <p>Accuracy: ${score}%</p>
-                    <p>Wrong Question Numbers: ${wrongQuestions.join(', ')}</p>
-                `;
+                resultTextEl.innerHTML =
+                    '<p>Total Questions: ' + allQuestions.length + '</p>' +
+                    '<p>Correct: ' + correctCount + '</p>' +
+                    '<p>Incorrect: ' + (allQuestions.length - correctCount) + '</p>' +
+                    '<p>Accuracy: ' + score + '%</p>' +
+                    '<p>Wrong Question Numbers: ' + wrongQuestions.join(', ') + '</p>';
 
                 resultModal.style.display = 'block';
             }
